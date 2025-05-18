@@ -1,13 +1,10 @@
-Here's a well-structured `README.md` file based on your content:
-
-```markdown
-# CrewAI Integration Project
+# LeroyAI Integration Project
 
 This project integrates CrewAI with a Flask backend and React frontend to process goals and descriptions through AI agents.
 
 ## Project Structure
 
-```
+```bash
 project/
 ├── backend/          # Python Flask server
 │   ├── .env          # Environment variables

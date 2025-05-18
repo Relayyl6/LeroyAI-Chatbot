@@ -8,7 +8,7 @@ This project integrates CrewAI with a Flask backend and React frontend to proces
 project/
 ├── backend/          # Python Flask server
 │   ├── .env          # Environment variables
-│   └── app.py        # Flask application
+│   ├── app.py        # Flask application
 |   └── requirement.txt
 ├── frontend/         # React application
 └── README.md         # This file

@@ -3,6 +3,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, LLM
+import pyttsx3
+import speech_recognition as sr
+import google.generativeai as genai
 
 load_dotenv() # Load environment variables from .env
 
@@ -15,11 +18,113 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in .env")
 
+current_emotion = "neutral"
+speech_queue = queue.Queue()
+tts_queue = queue.Queue()
+camera_active = False
+
+
 llm = LLM(
     model="gemini/gemini-1.5-flash", # or your preferred model
     temperature=0.7,
     api_key=api_key
 )
+
+class ChatbotState:
+    def __init__(self):
+        self.current_emotion = "neutral"
+        self.last_speech = ""
+        self.conversation_history = []
+        self.is_listening = False
+        self.camera_active = False
+
+# Global variables for shared state
+current_emotion = "neutral"
+speech_queue = queue.Queue()
+tts_queue = queue.Queue()
+camera_active = False
+
+class ChatbotState:
+    def __init__(self):
+        self.current_emotion = "neutral"
+        self.last_speech = ""
+        self.conversation_history = []
+        self.is_listening = False
+        self.camera_active = False
+
+# Global state instance
+chatbot_state = ChatbotState()   # global state object #OOP integration
+
+def recognize_speech_from_mic():
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
+    
+    try:
+        with microphone as source:
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print("Listening for speech...")
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+        
+        transcription = recognizer.recognize_google(audio)
+        return {
+            "success": True,
+            "transcription": transcription,
+            "error": None
+        }
+    except sr.RequestError as e:
+        return {
+            "success": False,
+            "transcription": None,
+            "error": f"API unavailable: {e}"
+        }
+    except sr.UnknownValueError:
+        return {
+            "success": False,
+            "transcription": None,
+            "error": "Unable to recognize speech"
+        }
+    except sr.WaitTimeoutError:
+        return {
+            "success": False,
+            "transcription": None,
+            "error": "No speech detected"
+        }
+
+# Initialize text-to-speech engine
+def speak_text(text):
+    try:
+        engine = pyttsx3.init()
+        engine.say(text)
+        engine.runAndWait()
+        return True
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        return False
+
+def chat_with_gemini(input_text, emotion_context=None):
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+        
+        # Add emotion context to the prompt if available
+        if emotion_context and emotion_context != "neutral":
+            enhanced_prompt = f"The user seems to be feeling {emotion_context}. Please respond appropriately to: {input_text}"
+        else:
+            enhanced_prompt = input_text
+            
+        chat = model.start_chat(history=[])
+        response = chat.send_message(enhanced_prompt)
+        return {
+            "success": True,
+            "response": response.text,
+            "error": None
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "response": None,
+            "error": str(e)
+        }
+
 
 @app.route('/api/generate', methods=['POST'])
 def generate_response():
@@ -50,7 +155,6 @@ def generate_response():
         crew = Crew(agents=[custom_agent], tasks=[custom_task], verbose=True)
         result = crew.kickoff()
         # print("Raw result from crew.kickoff():", result)
-
 
         result_str = str(result)
 

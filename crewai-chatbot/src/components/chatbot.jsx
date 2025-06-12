@@ -47,6 +47,19 @@ const Chatbot = () => {
       });
 
 
+      // How chat history becomes
+      // [
+      //   {
+      //     role: 'user',
+      //     goal: "Create a marketing plan",
+      //     description: "Strategy for product launch"
+      //   },
+      //   {
+      //     role: 'bot',
+      //     content: "Here’s your marketing plan: ... (Markdown/API response)"
+      //   }
+      // ]
+
 
       if (response?.data?.result) {
         setMessages((prev) => [
@@ -159,7 +172,7 @@ const Chatbot = () => {
           !isCollapsed && (
             <>
               {/* Suggested Prompts */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 shadow-xl rounded-xl">
                 <div className="flex flex-wrap gap-2 mb-4">
                   {suggestedPrompts.map((prompt, index) => (
                     <button
@@ -186,7 +199,7 @@ const Chatbot = () => {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Enter task description (e.g., Lifelike futuristic cityscape)"
-                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none h-24"
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     required
                   />
                   <button

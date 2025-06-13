@@ -6,6 +6,9 @@ from crewai import Agent, Task, Crew, LLM
 import pyttsx3
 import speech_recognition as sr
 import google.generativeai as genai
+import cv2
+from deepface import DeepFace
+import time
 
 load_dotenv() # Load environment variables from .env
 
@@ -17,26 +20,6 @@ CORS(app) # Enable CORS for local development (React app on different port)
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in .env")
-
-current_emotion = "neutral"
-speech_queue = queue.Queue()
-tts_queue = queue.Queue()
-camera_active = False
-
-
-llm = LLM(
-    model="gemini/gemini-1.5-flash", # or your preferred model
-    temperature=0.7,
-    api_key=api_key
-)
-
-class ChatbotState:
-    def __init__(self):
-        self.current_emotion = "neutral"
-        self.last_speech = ""
-        self.conversation_history = []
-        self.is_listening = False
-        self.camera_active = False
 
 # Global variables for shared state
 current_emotion = "neutral"
@@ -52,8 +35,14 @@ class ChatbotState:
         self.is_listening = False
         self.camera_active = False
 
+llm = LLM(
+    model="gemini/gemini-1.5-flash", # or your preferred model
+    temperature=0.7,
+    api_key=api_key
+)
+
 # Global state instance
-chatbot_state = ChatbotState()   # global state object #OOP integration
+chatbot_state = ChatbotState()   # global state object # OOP integration
 
 def recognize_speech_from_mic():
     recognizer = sr.Recognizer()
@@ -100,14 +89,42 @@ def speak_text(text):
     except Exception as e:
         print(f"TTS Error: {e}")
         return False
+    
+def speak_and_listen_for_response(prompt_text):
+    #speak prompt text
+    if not speak_text(prompt_text):
+        return jsonify({
+            "error" : "Failed to speak the prompt."
+        }), 500
+    
+    print(f"Listening for response...")
+    response = recognize_speech_from_mic()
 
-def chat_with_gemini(input_text, emotion_context=None):
+    if response["success"]:
+        user_response = response["transcription"].lower()
+
+        #check if the response is truthy
+        if user_response in ["yes", "yeah", "yep"]:
+            return True
+        elif user_response in ["no", "nope"]:
+            return False
+        else:
+            speak_text("I didn't get that, can you please come again.")
+            return None
+    else:
+        return jsonify({
+            "error" : "Error recognizing speech: {response['error']}"
+        }), 500
+
+
+
+def chat_with_gemini(input_text, input_description, emotion_context=None):
     try:
         model = genai.GenerativeModel('gemini-pro')
         
         # Add emotion context to the prompt if available
         if emotion_context and emotion_context != "neutral":
-            enhanced_prompt = f"The user seems to be feeling {emotion_context}. Please respond appropriately to: {input_text}"
+            enhanced_prompt = f"The user seems to be feeling {emotion_context}. Please respond appropriately to: {input_text} with description {input_description}"
         else:
             enhanced_prompt = input_text
             
@@ -125,6 +142,60 @@ def chat_with_gemini(input_text, emotion_context=None):
             "error": str(e)
         }
 
+# Capture single frame and detect motion
+def detect_emotion_from_frame():
+    try:
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret: # for false face detection or not face detected
+            return {
+                "Success" : False,
+                "emotion" : None,
+                "error" : "Camera Not Accessible"
+            }
+        analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
+
+        if isinstance(analysis, list):
+            dominant_emotion = analysis[0]['dominant_emotion']
+        else:
+            dominant_emotion = analysis['dominant_emotion']
+
+        return {
+            "Success" : True,
+            "emotion" : dominant_emotion,
+            "error" : None
+        }
+    except Exception as e:
+        return {
+           "Success" : False,
+           "emotion" : None,
+           "error" : str(e)
+        }
+
+def continuous_emotion_detection():
+    global chatbot_state # accessing the glovbal chatbot_state variable
+
+    while chatbot_state.camera_active:
+        try:
+            cap = cv2.VideoCapture(0)
+            ret, frame = cap.read()
+
+            if ret:
+                analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
+                if isinstance(analysis, list):
+                    chatbot_state.current_emotion = analysis[0]['dominant_emotion']
+                else:
+                    chatbot_state.current_emotion = analysis['dominant_emotion']
+            cap.release()
+            time.sleep(2)
+        except Exception as e:
+            print(f"Emotion detection error: {e}")
+            time.sleep(5)
+
+
+# API routes
 
 @app.route('/api/generate', methods=['POST'])
 def generate_response():
@@ -165,6 +236,48 @@ def generate_response():
     except Exception as e:
         app.logger.error(f"Error during crew kickoff: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+#API route for converting speech to text
+@app.route('/api/speech-to-text', methods=['POST'])
+def speech_to_text():
+    try:
+        result = recognize_speech_from_mic()
+
+        if result["success"]:
+            chatbot_state.last_speech = result["transcription"]
+            chatbot_state.conversation_history.append({
+                "type" : "user_speech",
+                "content" : result["transcription"],
+                "timestamp" : time.time()
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "success" : False,
+            "error" : str(e)
+        }), 500
+
+#API route for convertin text to speech
+@app.route('/api/text-to-speech', methods=['POST'])
+def text_to_speech():
+    try:
+        data = request.get_json()
+        if not data or 'goal' not in data:
+            return jsonify({
+                "error" : "missing test in request"
+            }), 500
+        text = data['goal']
+        description = data['description']
+        success = speak_and_listen_for_response("Would you like to include the description in your prompt?")
+        if success:
+            chatbot_state.conversation_history.append({
+                "type" : "ai_speech",
+                "content" : text,
+                "description"  : description
+                "timestamp" : time.time()
+            })
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001) # Run on a different port than React dev server

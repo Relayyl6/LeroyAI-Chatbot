@@ -43,10 +43,10 @@ source venv/bin/activate
 4. Install dependencies:
 
 ```bash
-pip install crewai google-generativeai python-dotenv flask flask-cors
+pip install crewai google-generativeai python-dotenv flask flask-cors pyttsx3 SpeechRecognition opencv-python deepface 
 ```
 
-*Note: pip currently supports Python 3.12 or lower.*
+*Note: pip currently supports Python 3.12 or lower.* total dependency download should be 1gb, tensorflow alone from deepface is like 400mb  
 
 ### Running the Backend
 

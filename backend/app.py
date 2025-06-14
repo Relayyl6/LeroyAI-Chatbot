@@ -28,10 +28,8 @@ if not api_key:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in .env")
 
 # Global variables for shared state
-current_emotion = "neutral"
 speech_queue = queue.Queue()
 text_to_speech_queue = queue.Queue()
-camera_active = False
 
 class ChatbotState:
     def __init__(self):
@@ -122,7 +120,7 @@ def speak_and_listen_for_response(prompt_text):
             return None
     else:
         return jsonify({
-            "error" : "Error recognizing speech: {response['error']}"
+            "error" : f"Error recognizing speech: {response['error']}"
         }), 500
 
 
@@ -177,6 +175,7 @@ def detect_emotion_from_frame():
             "error" : None
         }
     except Exception as e:
+        print(f"Deepface analysis error: {e}")
         return {
            "Success" : False,
            "emotion" : None,
@@ -186,22 +185,26 @@ def detect_emotion_from_frame():
 def continuous_emotion_detection():
     global chatbot_state # accessing the glovbal chatbot_state variable
 
-    while chatbot_state.camera_active:
-        try:
-            cap = cv2.VideoCapture(0)
-            ret, frame = cap.read()
+    lock = threading.lock()
+    with lock:
+        if chatbot_state.camera_active:
+            try:
+                cap = cv2.VideoCapture(0)
+                ret, frame = cap.read()
 
-            if ret:
-                analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
-                if isinstance(analysis, list):
-                    chatbot_state.current_emotion = analysis[0]['dominant_emotion']
-                else:
-                    chatbot_state.current_emotion = analysis['dominant_emotion']
-            cap.release()
-            time.sleep(2)
-        except Exception as e:
-            print(f"Emotion detection error: {e}")
-            time.sleep(5)
+                if ret:
+                    analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
+                    if isinstance(analysis, list):
+                        chatbot_state.current_emotion = analysis[0]['dominant_emotion']
+                    else:
+                        chatbot_state.current_emotion = analysis['dominant_emotion']
+                cap.release()
+                time.sleep(2)
+            except Exception as e:
+                print(f"Emotion detection error: {e}")
+                time.sleep(5)
+            finally:
+                cap.release()
 
 
 # API routes
@@ -210,8 +213,10 @@ def continuous_emotion_detection():
 def generate_response():
     try:
         data = request.get_json()
-        if not data or 'goal' not in data or 'description' not in data:
-            return jsonify({"error": "Missing 'goal' or 'description' in request"}), 400
+        if not data or 'goal' not in data or 'description' not in data or 'message' not in data:
+            return jsonify({
+                "error": "Missing 'goal' or 'description' or 'message' in request"
+            }), 400
 
         user_goal = data['goal']
         user_description = data['description']
@@ -323,7 +328,7 @@ def speech_to_text():
 def text_to_speech():
     try:
         data = request.get_json()
-        if not data or 'goal' not in data:
+        if not data or 'goal' not in data or description not in data:
             return jsonify({
                 "error" : "missing text in request"
             }), 500
@@ -351,6 +356,38 @@ def text_to_speech():
         return jsonify({
             "error" : str(e)
         }), 500
+    
+@app.route('/api/ask-to-speak-response', methods=['POST'])
+def speak_then_listen_for_response():
+    try:
+        data = request.get_json()
+        if not data or 'aiReponse' not in data:
+            return jsonify({
+                "error" : "Missing response to play back"
+            }), 400
+        
+        user_question = speak_and_listen_for_response("Would you like to listen to the response?")
+        ai_reponse = data['airesponse']
+        
+        if user_question:
+            success = speak_text(ai_reponse)
+            print("Reading out response...")
+        elif user_question is None:
+            return jsonify({
+                "success" : False,
+                "message" : "User response was unclear."
+            }), 400
+
+        return jsonify({
+            "success" : True,
+            "message" : success
+        })
+    except Exception as e:
+        app.logger.error(f"Error in /api/ask-to-speak-response: {str(e)}")
+        return jsonify({
+            "error" : f"Error occured: {str(e)}"
+        }), 500
+
 
 @app.route('/api/detect-emotion', methods=['POST'])
 def detect_emotion():
@@ -369,10 +406,15 @@ def detect_emotion():
 @app.route('/api/start-emotion-monitoring', methods=['POST'])
 def start_emotion_monitoring():
     try:
+        if chatbot_state.camera_active:
+            return jsonify({
+                "success": False,
+                "message": "Emotion monitoring is already active"
+            }), 400
         if not chatbot_state.camera_active:
             chatbot_state.camera_active = True
             emotion_thread = threading.Thread(target=continuous_emotion_detection)
-            emotion_thread.daemon
+            emotion_thread.daemon = True
             emotion_thread.start()
         return jsonify({
             "success" : True,
@@ -501,8 +543,12 @@ if __name__ == '__main__':
     print("- POST /api/detect-emotion - Detect current emotion")
     print("- POST /api/start-emotion-monitoring - Start continuous emotion detection")
     print("- POST /api/stop-emotion-monitoring - Stop emotion detection")
+    print("- POST /api/ask-to-speak-response - Ask to read response")
     print("- GET /api/get-current-emotion - Get current emotion")
     print("- GET /api/conversation-history - Get chat history")
     print("- GET /api/status - Get system status")
 
-    app.run(debug=True, port=5001) # Run on a different port than React dev server
+
+    debug_mode = os.environ.get("DEBUG").lower() == "true"
+    port = int(os.environ.get("PORT"))
+    app.run(debug=debug_mode, port=port) # Run on a different port than React dev server

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import apiHandling from './apiHandling';
 
 const Chatbot = () => {
   const [goal, setGoal] = useState('');
@@ -17,6 +18,97 @@ const Chatbot = () => {
   const [isEmotionMonitoring, setIsEmotionMonitoring] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false)
 
+  // sample calling 
+  // Using Method 3 (enhanced with custom options)
+  // const result = await enhancedApiCall('/generate', 'POST', { message: 'Hello' }, { timeout: 5000 });
+
+  // generate format
+  // fetch('/api/generate', {
+  //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
+  //   body: JSON.stringify({
+  //     message: "How can I improve my presentation skills?",
+  //     auto_speak: true  // Optional: speak the response
+  //   })
+  // })
+
+  const messageEndRef = useRef(null);
+  
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({
+      behavior : "smooth"
+    });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages])
+
+  useEffect(() => {
+    startEmotionMonitoring();
+
+    getCurrentEmotion();
+
+    return () => {
+      stopEmotionMonitoring()
+    };
+
+  }, [])
+
+  const startEmotionMonitoring = async () => {
+    try {
+      await apiHandling('/start-emotion-monitoring', 'POST');
+      setIsEmotionMonitoring(true);
+
+      // stack emotion update for every 3 seconds
+      const interval = setInterval(getCurrentEmotion, 3000);
+      return () => clearInterval(interval);
+    } catch (error) {
+      console.error("Error starting Emotion Monitoring", error);
+    }
+  }
+
+  const getCurrentEmotion = async () => {
+    try {
+      const response = await apiHandling('/get-current-emotion')
+      if (response.success) {
+        setCurrentEmotion(response.emotion)
+      }
+    } catch (error) {
+      console.error("Error getting emotion", error);
+    }
+  }
+
+  const stopEmotionMonitoring = async () => {
+    try {
+      await apiHandling('/stop-emotion-monitoring', 'POST');
+      setIsEmotionMonitoring(false);
+    } catch (error) {
+      console.error("Error stopping Emotion Monitoring", error);
+    }
+  }
+
+  // send message to AI
+  const sendMessage = async () => {
+    if (!inputText.trim() || isLoading) return; // fun stuff, for inputText, after checking fi teh stuff is empty, empty is falsy, so then the ! makes it truthy, or isLoading is truthy, then the function returns early
+
+    const userMessage = {
+      type : 'user',
+      content : inputText,
+      emotion : currentEmotion,
+      timestamp : new Date().toLocaleTimeString();
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+
+    //resulting logic 
+    // messages = [
+    //   { type: 'user', content: 'Hello!', emotion: 'neutral', timestamp: '10:00 AM' },
+    //   { type: 'user', content: 'How are you?', emotion: 'neutral', timestamp: '10:01 AM' },
+    // ];
+  }
+
   // Predefined prompt suggestions
   const suggestedPrompts = [
     {
@@ -32,6 +124,8 @@ const Chatbot = () => {
       description: "Create a Python script for data analysis",
     },
   ];
+
+  // skeletal API call handler
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -9,6 +9,12 @@ import google.generativeai as genai
 import cv2
 from deepface import DeepFace
 import time
+import queue
+# import json
+import threading
+# import base64
+# import numpy as np
+# from io import BytesIO
 
 load_dotenv() # Load environment variables from .env
 
@@ -24,7 +30,7 @@ if not api_key:
 # Global variables for shared state
 current_emotion = "neutral"
 speech_queue = queue.Queue()
-tts_queue = queue.Queue()
+text_to_speech_queue = queue.Queue()
 camera_active = False
 
 class ChatbotState:
@@ -80,16 +86,19 @@ def recognize_speech_from_mic():
         }
 
 # Initialize text-to-speech engine
-def speak_text(text):
-    try:
-        engine = pyttsx3.init()
-        engine.say(text)
-        engine.runAndWait()
+def speak_text(text, speak_prompt=True):
+    if speak_prompt:
+        try:
+            engine = pyttsx3.init()
+            engine.say(text)
+            engine.runAndWait()
+            return True
+        except Exception as e:
+            print(f"TTS Error: {e}")
+            return False
+    if not speak_prompt:
         return True
-    except Exception as e:
-        print(f"TTS Error: {e}")
-        return False
-    
+
 def speak_and_listen_for_response(prompt_text):
     #speak prompt text
     if not speak_text(prompt_text):
@@ -118,13 +127,13 @@ def speak_and_listen_for_response(prompt_text):
 
 
 
-def chat_with_gemini(input_text, input_description, emotion_context=None):
+def chat_with_gemini(input_text, emotion_context=None):
     try:
         model = genai.GenerativeModel('gemini-pro')
         
         # Add emotion context to the prompt if available
         if emotion_context and emotion_context != "neutral":
-            enhanced_prompt = f"The user seems to be feeling {emotion_context}. Please respond appropriately to: {input_text} with description {input_description}"
+            enhanced_prompt = f"The user seems to be feeling {emotion_context}. Please respond appropriately to: {input_text}"
         else:
             enhanced_prompt = input_text
             
@@ -207,36 +216,87 @@ def generate_response():
         user_goal = data['goal']
         user_description = data['description']
 
+        user_input = ""
+        if 'goal' in data and 'description' in data:
+            user_input = f"Goal: {user_goal} \n Description: {user_description}"
+        elif 'message' in data:
+            user_input = data['message']
+        elif 'text' in data:
+            user_input = data['text']
+        else:
+            jsonify({
+                "error" : "missing required input field"
+            }), 400
+
+
+        emotion_context = chatbot_state.current_emotion
+
+        ai_result = chat_with_gemini(user_input, emotion_context)
+
+        if not ai_result["success"]:
+            return jsonify({
+                "error" : ai_result["error"]
+            }), 500
+
+        response_text = ai_result["response"]
+
+        chatbot_state.conversation_history.extend([
+            {
+                "type" : "user_message",
+                "message" : user_input,
+                "emotion" : emotion_context,
+                "timestamp" : time.time()
+            },
+            {
+                "type" : "ai_response",
+                "content" : ai_result,
+                "timestamp" : time.time()
+            }
+        ])
+
+        auto_speak = data.get("auto_speak", False)
+        if auto_speak:
+            speak_text(response_text)
+
+        #crew AI persepctive
         # Dynamically create agent and task based on input
         # You might want to make the agent's role more dynamic too, or have a fixed one
-        custom_agent = Agent(
-            role="Creative Content Generator", # Or make this configurable
-            goal=user_goal,
-            backstory="You are an expert in generating creative content based on user specifications, with a focus on clear and actionable outputs.",
-            verbose=True,
-            llm=llm
-        )
+        # custom_agent = Agent(
+        #     role="Creative Content Generator", # Or make this configurable
+        #     goal=user_goal,
+        #     backstory="You are an expert in generating creative content based on user specifications, with a focus on clear and actionable outputs.",
+        #     verbose=True,
+        #     llm=llm
+        # )
 
-        custom_task = Task(
-            description=user_description,
-            expected_output="A detailed and creative response fulfilling the user's request.", # Or customize this
-            agent=custom_agent
-        )
+        # custom_task = Task(
+        #     description=user_description,
+        #     expected_output="A detailed and creative response fulfilling the user's request.", # Or customize this
+        #     agent=custom_agent
+        # )
 
-        crew = Crew(agents=[custom_agent], tasks=[custom_task], verbose=True)
-        result = crew.kickoff()
-        # print("Raw result from crew.kickoff():", result)
+        # crew = Crew(agents=[custom_agent], tasks=[custom_task], verbose=True)
+        # result = crew.kickoff()
+        # # print("Raw result from crew.kickoff():", result)
 
-        result_str = str(result)
+        # result_str = str(result)
 
-        # print("Response being sent to frontend:", result)
-        return jsonify({"result": result_str})
-        
+        # # print("Response being sent to frontend:", result)
+        # return jsonify({"result": result_str})
+
+        return jsonify({
+            "result" : response_text,
+            "emotion_context" : emotion_context,
+            "conversation_ID" : len(chatbot_state.conversation_history),
+            "auto_spoke" : auto_speak
+        })
 
     except Exception as e:
         app.logger.error(f"Error during crew kickoff: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-    
+        return jsonify({
+            "error": str(e)
+        }), 500
+
 #API route for converting speech to text
 @app.route('/api/speech-to-text', methods=['POST'])
 def speech_to_text():
@@ -265,19 +325,184 @@ def text_to_speech():
         data = request.get_json()
         if not data or 'goal' not in data:
             return jsonify({
-                "error" : "missing test in request"
+                "error" : "missing text in request"
             }), 500
         text = data['goal']
+        condition = speak_text(text, False)
         description = data['description']
         success = speak_and_listen_for_response("Would you like to include the description in your prompt?")
-        if success:
+        if success is True:
             chatbot_state.conversation_history.append({
                 "type" : "ai_speech",
                 "content" : text,
-                "description"  : description
+                "description"  : description,
                 "timestamp" : time.time()
             })
+        elif success is False:
+            chatbot_state.conversation_history.append({
+                "type" : "ai_speech",
+                "content" : text,
+                "timestamp" : time.time()
+            })
+        return jsonify({
+            "success" : condition
+        })
+    except Exception as e:
+        return jsonify({
+            "error" : str(e)
+        }), 500
+
+@app.route('/api/detect-emotion', methods=['POST'])
+def detect_emotion():
+    try:
+        result = detect_emotion_from_frame()
+
+        if result["success"]:
+            chatbot_state.current_emotion = result["emotion"]
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            "success" : False,
+            "error" : str(e)
+        }), 500
+    
+@app.route('/api/start-emotion-monitoring', methods=['POST'])
+def start_emotion_monitoring():
+    try:
+        if not chatbot_state.camera_active:
+            chatbot_state.camera_active = True
+            emotion_thread = threading.Thread(target=continuous_emotion_detection)
+            emotion_thread.daemon
+            emotion_thread.start()
+        return jsonify({
+            "success" : True,
+            "message" : "Emotion monitoring started"
+        })
+    except Exception as e:
+        return jsonify({
+            "success" : False,
+            "error" : str(e)
+        }), 500
+    
+@app.route('/api/stop-emotion-monitoring', methods=['POST'])
+def stop_emotion_monitoring():
+    try:
+        chatbot_state.camera_active = False
+        return jsonify({
+            "success" : True,
+            "message" : "Emotion monitoring stopped"
+        })
+    except Exception as e:
+        return jsonify({
+            "success" : False,
+            "error" : str(e)
+        }), 500
+
+@app.route('/api/voice-chat', methods=['POST'])
+def voice_chat():
+    try:
+        speech_result = recognize_speech_from_mic()
+
+        if not speech_result["success"]:
+            return jsonify({
+                "success" : False,
+                "step" : "speech_recognition",
+                "error" : speech_result["error"]
+            }), 400
+        
+        user_speech = speech_result["transcription"]
+
+        ai_result = chat_with_gemini(user_speech, chatbot_state.current_emotion)
+
+        if not ai_result["success"]:
+            return jsonify({
+                "success" : False,
+                "step" : "ai_generation",
+                "error" : ai_result["error"]
+            }), 500
+        
+        ai_response = ai_result["response"]
+
+        text_to_speech_success = speak_text(ai_response)
+
+        chatbot_state.conversation_history.extend([
+            {
+                "type" : "user_speech",
+                "content" : user_speech,
+                "emotion" : chatbot_state.current_emotion,
+                "timestamp" : time.time()
+            },
+            {
+                "type" : "ai_spoken_response",
+                "content" : ai_response,
+                "timestamp" : time.time()
+            }
+        ])
+
+        return jsonify({
+            "success" : True,
+            "user_speech" : user_speech,
+            "ai_response" : ai_response,
+            "emotion_context" : chatbot_state.current_emotion,
+            "text_to_speech_success" : text_to_speech_success
+        })
+    except Exception as e:
+        return jsonify({
+            "success" : False,
+            "error" : str(e)
+        }), 500
+
+@app.route('/api/get-current-emotion', methods=['GET'])
+def get_current_emotion():
+    return jsonify({
+        "success" : True,
+        "emotion" : chatbot_state.current_emotion,
+        "timestamp" : time.time()
+    })
+
+@app.route('/api/conversation-history', methods=['GET'])
+def conversation_history():
+    return jsonify({
+        "success" : True,
+        "history" : chatbot_state.conversation_history,
+        "current_emotion" : chatbot_state.current_emotion
+    })
+
+@app.route('/api/clear-history', methods=['POST'])
+def clear_conversation_history():
+    chatbot_state.conversation_history = []
+    return jsonify({
+        "success": True,
+        "message": "Conversation history cleared"
+    })
+
+#current chatbot status
+@app.route('/api/status', methods=['GET'])
+def status():
+    return jsonify({
+        "success" : True,
+        "status" : {
+            "emotion_monitoring_active" : chatbot_state.camera_active,
+            "current_emotion" : chatbot_state.current_emotion,
+            "conversation_length" : len(chatbot_state.conversation_history),
+            "last_speech" : chatbot_state.last_speech
+        }
+    })
+
 
 
 if __name__ == '__main__':
+    print("Starting Enhanced Chatbot API Server...")
+    print("Available endpoints:")
+    print("- POST /api/generate - Generate AI responses")
+    print("- POST /api/speech-to-text - Convert speech to text")
+    print("- POST /api/text-to-speech - Convert text to speech")
+    print("- POST /api/voice-chat - Complete voice conversation")
+    print("- POST /api/detect-emotion - Detect current emotion")
+    print("- POST /api/start-emotion-monitoring - Start continuous emotion detection")
+    print("- POST /api/stop-emotion-monitoring - Stop emotion detection")
+    print("- GET /api/get-current-emotion - Get current emotion")
+    print("- GET /api/conversation-history - Get chat history")
+    print("- GET /api/status - Get system status")
+
     app.run(debug=True, port=5001) # Run on a different port than React dev server

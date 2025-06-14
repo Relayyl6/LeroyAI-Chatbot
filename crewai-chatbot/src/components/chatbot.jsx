@@ -10,6 +10,13 @@ const Chatbot = () => {
   const [messages, setMessages] = useState([]); // Store chat history
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // advanced featuring
+  const [inputText, setInputText] = useState('');
+  const [currentEmotion, setCurrentEmotion] = useState('neutral');
+  const [isListening, setIsListening] = useState(false);
+  const [isEmotionMonitoring, setIsEmotionMonitoring] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false)
+
   // Predefined prompt suggestions
   const suggestedPrompts = [
     {

@@ -102,11 +102,43 @@ const Chatbot = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
-    //resulting logic 
+    //resulting logic
     // messages = [
     //   { type: 'user', content: 'Hello!', emotion: 'neutral', timestamp: '10:00 AM' },
     //   { type: 'user', content: 'How are you?', emotion: 'neutral', timestamp: '10:01 AM' },
     // ];
+
+    try {
+      const response = await apiHandling('/generate', 'POST', {
+        message : inputText
+      });
+
+      const requestReadOtLoud = await apiHandling('/aiReponse', 'POST', {
+        aiReponse : response.result
+      })
+
+      const aiMessage = {
+        type : 'bot',
+        content : response.result,
+        emotionContext : response.emotion_context,
+        timestamp : new Date().toLocaleDateString()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+      setInputText('')
+      //resulting logic
+      // messages = [
+      //   { type: 'user', content: 'Hello!', emotion: 'neutral', timestamp: '10:00 AM' },
+      //   { type: 'user', content: 'How are you?', emotion: 'neutral', timestamp: '10:01 AM' },
+      //   { type: 'bot', content: 'I am fine, what about you?', emotionContext: 'happy', timestamp: '10:01 AM'}
+      // ];
+    } catch (error) {
+      const errorMessage = {
+        type : 'error',
+        content : `Error: ${error.message}`,
+        timestamp : new Date().toLocaleDateString()
+      }
+    }
   }
 
   // Predefined prompt suggestions

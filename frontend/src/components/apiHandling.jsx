@@ -1,13 +1,12 @@
-import React from 'react'
 import axios from 'axios';
 
-const API_BASE = 'https://localhost:5001/api'
+const API_BASE = process.env.REACT_APP_API_BASE || 'https://localhost:5001/api';
 
 // new instance of axios with a custom config
 const apiClient = axios.create({
     baseURL : API_BASE,
     headers : {
-        'content-Type' : 'application/json'
+        'Content-Type' : 'application/json'
     },
     timeout : 10000,
 })
@@ -15,25 +14,27 @@ const apiClient = axios.create({
 // adding request interceptor for logging, auth tokens etc
 apiClient.interceptors.request.use(
     (config) => {
-    console.log(`Making ${config.method.toUpperCase()} request to ${config.url}`);
-    return config;
-    }, (error) => {
-    console.error('Request interceptor error:', error)
-    return Promise.reject(error);
+        console.log(`Making ${config.method.toUpperCase()} request to ${config.url}`);
+        return config;
+    },
+    (error) => {
+        console.error('Request interceptor error:', error)
+        return Promise.reject(error);
     }
 );
 
 // adding response interceptors e.g. for global error handling
 apiClient.interceptors.response.use(
     (response) => {
-    return response;
-    }, (error) => {
+        return response;
+    },
+    (error) => {
         if (error.response?.status === 401) {
             console.error('Unauthorized - redirect to login');
         } else if (error.response?.status >= 500) {
             console.error('Server Error Occured');
         }
-    return Promise.reject(error);
+        return Promise.reject(error);
     }
 );
 
@@ -60,14 +61,14 @@ const apiHandling = async (endpoint, method = 'GET', data = null, options = {}) 
         console.error('Enhanced API error:', error)
 
         //Detailed error handling
-        if (error.request) {
+        if (error.response) {
             const errorData = error.response.data;
-            throw new Error(errorData.error || errorData.message || `HTTP ${error.response.status}: ${error.response.statusText}`);
-        } else if (error.response) {
+            throw new Error(errorData?.error || errorData?.message || `HTTP ${error.response.status}: ${error.response.statusText}`);
+        } else if (error.request) {
             // Request made but no response received
             throw new Error('Network Error - no response received')
         } else {
-            throw new Error(error.message || 'Unknown error Occured')
+            throw new Error(error.message || 'Unknown Error occured')
         }
     }
 }

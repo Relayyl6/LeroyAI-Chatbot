@@ -51,7 +51,7 @@ chatbot_state = ChatbotState()   # global state object # OOP integration
 def recognize_speech_from_mic():
     recognizer = sr.Recognizer()
     microphone = sr.Microphone()
-    
+
     try:
         with microphone as source:
             recognizer.adjust_for_ambient_noise(source, duration=1)
@@ -185,7 +185,7 @@ def detect_emotion_from_frame():
 def continuous_emotion_detection():
     global chatbot_state # accessing the glovbal chatbot_state variable
 
-    lock = threading.lock()
+    lock = threading.Lock()
     with lock:
         if chatbot_state.camera_active:
             try:
@@ -318,6 +318,7 @@ def speech_to_text():
 
         return jsonify(result)
     except Exception as e:
+        app.logger.error(f"Error occured in /api/speech-to-text: {str(e)}")
         return jsonify({
             "success" : False,
             "error" : str(e)
@@ -328,14 +329,26 @@ def speech_to_text():
 def text_to_speech():
     try:
         data = request.get_json()
-        if not data or 'goal' not in data or description not in data:
+        if not data or 'message' not in data:
             return jsonify({
                 "error" : "missing text in request"
-            }), 500
+            }), 400
         text = data['goal']
-        condition = speak_text(text, False)
         description = data['description']
-        success = speak_and_listen_for_response("Would you like to include the description in your prompt?")
+
+        question = speak_and_listen_for_response("Would you like to include the description in your text?")
+        if question is None:
+            return jsonify({
+                "success" : False,
+                "message" :"User response is unclear"
+            }), 400
+
+        if text or 'message' in data or not question:
+            success = speak_text(text)
+        elif text or 'message' in data or question:
+            enhanced_prompt = f"{text} {description}"
+            success = speak_text(enhanced_prompt)
+
         if success is True:
             chatbot_state.conversation_history.append({
                 "type" : "ai_speech",
@@ -350,11 +363,12 @@ def text_to_speech():
                 "timestamp" : time.time()
             })
         return jsonify({
-            "success" : condition
+            "success" : success
         })
     except Exception as e:
+        app.logger.error(f"Error in /api/text-to-speech: {str(e)}")
         return jsonify({
-            "error" : str(e)
+            "error" : f"Error occurred: {str(e)}"
         }), 500
     
 @app.route('/api/ask-to-speak-response', methods=['POST'])
@@ -367,7 +381,7 @@ def speak_then_listen_for_response():
             }), 400
         
         user_question = speak_and_listen_for_response("Would you like to listen to the response?")
-        ai_reponse = data['airesponse']
+        ai_reponse = data['aiResponse']
         
         if user_question:
             success = speak_text(ai_reponse)
@@ -549,6 +563,6 @@ if __name__ == '__main__':
     print("- GET /api/status - Get system status")
 
 
-    debug_mode = os.environ.get("DEBUG").lower() == "true"
-    port = int(os.environ.get("PORT"))
+    debug_mode = os.environ.get("DEBUG", False).lower() == "true"
+    port = int(os.environ.get("PORT", 5001))
     app.run(debug=debug_mode, port=port) # Run on a different port than React dev server

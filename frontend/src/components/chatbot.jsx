@@ -275,81 +275,12 @@ const Chatbot = () => {
 
 
 
-  // // skeletal API call handler
-
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   setIsLoading(true);
-  //   setError('');
-
-  //   if (!goal.trim()) {
-  //     setError('Goal and Description fields are empty');
-  //     setIsLoading(false);
-  //     return;
-  //   }
-
-  //   // Add user message to chat
-  //   setMessages([...messages, { role: 'user', goal, description }]);
-
-  //   try {
-  //     const response = await axios.post('http://127.0.0.1:5001/api/generate', {
-  //       goal,
-  //       description,
-  //     });
-
-
-  //     // How chat history becomes
-  //     // [
-  //     //   {
-  //     //     role: 'user',
-  //     //     goal: "Create a marketing plan",
-  //     //     description: "Strategy for product launch"
-  //     //   },
-  //     //   {
-  //     //     role: 'bot',
-  //     //     content: "Here’s your marketing plan: ... (Markdown/API response)"
-  //     //   }
-  //     // ]
-
-
-  //     if (response?.data?.result) {
-  //       setMessages((prev) => [
-  //         ...prev,
-  //         {
-  //           role: 'bot',
-  //           content: response.data.result
-  //         },
-  //       ]);
-  //     } else {
-  //       setError('Received a response, but the expected "result" field was not found.');
-  //     }
-  //   } catch (err) {
-  //     console.error("Error fetching response:", err);
-  //     let errorMessage = 'An unexpected error occurred while fetching the response.';
-  //     if (err.response) {
-  //       errorMessage = err.response.data?.error ||
-  //         (typeof err.response.data === 'string' && err.response.data.trim() !== ''
-  //           ? err.response.data
-  //           : `Server Error: ${err.response.status} ${err.response.statusText || 'Unknown'}`);
-  //     } else if (err.request) {
-  //       errorMessage = 'No response received from the server. Please check your network connection and ensure the server is running.';
-  //     } else if (err.message) {
-  //       errorMessage = err.message;
-  //     }
-  //     setError(errorMessage);
-  //   } finally {
-  //     setIsLoading(false);
-  //     setGoal('');
-  //     setDescription('');
-  //   }
-  // };
-
   return (
     <div className="relative flex w-screen items-center justify-center h-screen bg-gray-100 dark:bg-gray-900 p-4">
-      <div className="w-[60%] items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col h-[95vh]">
+      <div className="w-[90%] lg:w-[65%] items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col h-[95vh]">
         {/* Header */}
-        <div className="flex p-4 border-b border-gray-200 dark:border-gray-700 gap-2">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+        <div className="flex p-4 border-b border-gray-200 dark:border-gray-700 bg-red-300 gap-2">
+          <h1 className="md:text-2xl text-xs font-code font-bold text-gray-800 bg-black dark:text-white">
             LeroyAI Chatbot
           </h1>
         </div>
@@ -442,7 +373,7 @@ const Chatbot = () => {
           !isCollapsed && (
             <>
               {/* Suggested Prompts */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 dark:bg-gray-300 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
                 <form onSubmit={sendMessage} className="space-y-2">
                   <div className='relative flex flex-col w-full h-[8.5rem] dark:bg-gray-900 bg-gray-600 rounded-md'>
                     <textarea
@@ -467,57 +398,64 @@ const Chatbot = () => {
                         }}
                         required
                       />
-                      <div className='absolute bottom-1 w-full h-fit flex flex-row z-10'>
-                        <div className='mx-2 rounded-md w-full flex  items-center justify-between'>
-                          <div className='flex'>
-                            <button
+                      <div className='absolute bottom-0 w-full h-fit flex flex-row z-10'>
+                        <div className='mx-2 rounded-md w-full flex items-center justify-between'>
+                          <div className='flex gap-2 flex-col md:flex-row '>
+                            <div className='bg-black hidden sm:flex flex-row rounded-md'>
+                              <button
                               type="button"
                               disabled={isLoading}
                               onClick={isEmotionMonitoring ? stopEmotionMonitoring : startEmotionMonitoring}
-                              className="h-fit p-2 my-0 ml-2 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
+                              className="h-fit p-2 my-1 ml-1 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
                               >
                                 {isEmotionMonitoring ? 'Stop Emotion' : 'Detect 😄'} 
-                            </button>
-                            <div className='h-fit p-[0.3rem] my-0 mx-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 dark:bg-neutral-900 transition pointer-events-none'
-                            style={{
-                              fontSize : '1rem',
-                              fontWeight : '500',
-                            }}>
-                              {/* You seem &nbsp; */}
-                              <span style={{
-                                color : getEmotionColor(currentEmotion),
-                                textTransform : 'capitalize'
+                              </button>
+                              <div 
+                                className='h-fit p-[0.3rem] my-1 mx-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 dark:bg-neutral-900 transition pointer-events-none'
+                                style={{
+                                  fontSize : '1rem',
+                                  fontWeight : '500',
                                 }}>
-                                {currentEmotion}
-                              </span> 
-                              <Emoji/>
+                                  {/* You seem &nbsp; */}
+                                <span style={{
+                                  color : getEmotionColor(currentEmotion),
+                                  textTransform : 'capitalize'
+                                  }}>
+                                  {currentEmotion}
+                                </span> 
+                                <Emoji/>
                       
+                              </div>
+                          
+                              </div>
+                                <div className='bg-white hidden lg:flex flex-row rounded-md'>
+                                  <button
+                                  type="button"
+                                  disabled={inputText}
+                                  onClick={clearHistory}
+                                  className="h-fit p-2 my-1 ml-1 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
+                                  >
+                                    {inputText ? 'clearing' : 'clear'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isListening}
+                                    onClick={speechToText}
+                                    className={`${isListening ? 'bg-[ff9800]' : 'bg-[ff0000]'} h-fit p-2 my-1 ml-1 mr-0 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition`}
+                                    >
+                                      {isListening ? 'Listening 👂' : 'STT 🎤'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    // disabled={!inputText}
+                                    onClick={startVoiceChat}
+                                    className="h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
+                                    >
+                                      {inputText ? 'AI speaking' : 'User speak'}
+                                  </button>
+                                </div>
                             </div>
-                            <button
-                              type="button"
-                              disabled={inputText}
-                              onClick={clearHistory}
-                              className="h-fit p-2 my-0 ml-2 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
-                              >
-                                {inputText ? 'clearing' : 'clear'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isListening}
-                              onClick={speechToText}
-                              className={`${isListening ? 'bg-[ff9800]' : 'bg-[ff0000]'} h-fit p-2 my-0 ml-2 mr-0 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition`}
-                              >
-                                {isListening ? 'Listening 👂' : 'STT 🎤'}
-                            </button>
-                            <button
-                              type="button"
-                              // disabled={!inputText}
-                              onClick={startVoiceChat}
-                              className="h-fit p-2 my-0 ml-2 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
-                              >
-                                {inputText ? 'AI speaking' : 'User speak'}
-                            </button>
-                          </div>
+                            
 
                           <div className='mr-2'>
                             <Checkbox

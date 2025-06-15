@@ -149,6 +149,7 @@ const Chatbot = () => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setInputText('')
     }
   }
 
@@ -243,20 +244,20 @@ const Chatbot = () => {
   }
  
   // Predefined prompt suggestions
-  const suggestedPrompts = [
-    {
-      goal: "Create a marketing plan",
-      description: "Develop a strategy for launching a new tech product",
-    },
-    {
-      goal: "Write a blog post",
-      description: "Draft a 500-word article on AI advancements",
-    },
-    {
-      goal: "Generate code",
-      description: "Create a Python script for data analysis",
-    },
-  ];
+  // const suggestedPrompts = [
+  //   {
+  //     goal: "Create a marketing plan",
+  //     description: "Develop a strategy for launching a new tech product",
+  //   },
+  //   {
+  //     goal: "Write a blog post",
+  //     description: "Draft a 500-word article on AI advancements",
+  //   },
+  //   {
+  //     goal: "Generate code",
+  //     description: "Create a Python script for data analysis",
+  //   },
+  // ];
 
   const getEmotionColor = (emotion) => {
     const colors = {
@@ -274,80 +275,74 @@ const Chatbot = () => {
 
 
 
-  // skeletal API call handler
+  // // skeletal API call handler
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setIsLoading(true);
+  //   setError('');
 
-    if (!goal.trim()) {
-      setError('Goal and Description fields are empty');
-      setIsLoading(false);
-      return;
-    }
+  //   if (!goal.trim()) {
+  //     setError('Goal and Description fields are empty');
+  //     setIsLoading(false);
+  //     return;
+  //   }
 
-    // Add user message to chat
-    setMessages([...messages, { role: 'user', goal, description }]);
+  //   // Add user message to chat
+  //   setMessages([...messages, { role: 'user', goal, description }]);
 
-    try {
-      const response = await axios.post('http://127.0.0.1:5001/api/generate', {
-        goal,
-        description,
-      });
-
-
-      // How chat history becomes
-      // [
-      //   {
-      //     role: 'user',
-      //     goal: "Create a marketing plan",
-      //     description: "Strategy for product launch"
-      //   },
-      //   {
-      //     role: 'bot',
-      //     content: "Here’s your marketing plan: ... (Markdown/API response)"
-      //   }
-      // ]
+  //   try {
+  //     const response = await axios.post('http://127.0.0.1:5001/api/generate', {
+  //       goal,
+  //       description,
+  //     });
 
 
-      if (response?.data?.result) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'bot',
-            content: response.data.result
-          },
-        ]);
-      } else {
-        setError('Received a response, but the expected "result" field was not found.');
-      }
-    } catch (err) {
-      console.error("Error fetching response:", err);
-      let errorMessage = 'An unexpected error occurred while fetching the response.';
-      if (err.response) {
-        errorMessage = err.response.data?.error ||
-          (typeof err.response.data === 'string' && err.response.data.trim() !== ''
-            ? err.response.data
-            : `Server Error: ${err.response.status} ${err.response.statusText || 'Unknown'}`);
-      } else if (err.request) {
-        errorMessage = 'No response received from the server. Please check your network connection and ensure the server is running.';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-      setGoal('');
-      setDescription('');
-    }
-  };
+  //     // How chat history becomes
+  //     // [
+  //     //   {
+  //     //     role: 'user',
+  //     //     goal: "Create a marketing plan",
+  //     //     description: "Strategy for product launch"
+  //     //   },
+  //     //   {
+  //     //     role: 'bot',
+  //     //     content: "Here’s your marketing plan: ... (Markdown/API response)"
+  //     //   }
+  //     // ]
 
-  // Handle clicking a suggested prompt
-  const handlePromptClick = (prompt) => {
-    setGoal(prompt.goal);
-    setDescription(prompt.description);
-  };
+
+  //     if (response?.data?.result) {
+  //       setMessages((prev) => [
+  //         ...prev,
+  //         {
+  //           role: 'bot',
+  //           content: response.data.result
+  //         },
+  //       ]);
+  //     } else {
+  //       setError('Received a response, but the expected "result" field was not found.');
+  //     }
+  //   } catch (err) {
+  //     console.error("Error fetching response:", err);
+  //     let errorMessage = 'An unexpected error occurred while fetching the response.';
+  //     if (err.response) {
+  //       errorMessage = err.response.data?.error ||
+  //         (typeof err.response.data === 'string' && err.response.data.trim() !== ''
+  //           ? err.response.data
+  //           : `Server Error: ${err.response.status} ${err.response.statusText || 'Unknown'}`);
+  //     } else if (err.request) {
+  //       errorMessage = 'No response received from the server. Please check your network connection and ensure the server is running.';
+  //     } else if (err.message) {
+  //       errorMessage = err.message;
+  //     }
+  //     setError(errorMessage);
+  //   } finally {
+  //     setIsLoading(false);
+  //     setGoal('');
+  //     setDescription('');
+  //   }
+  // };
 
   return (
     <div className="relative flex w-screen items-center justify-center h-screen bg-gray-100 dark:bg-gray-900 p-4">
@@ -382,18 +377,18 @@ const Chatbot = () => {
                     ? 'bg-neutral-900 text-white' : msg.role === 'error' ? 'bg-red-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white'
                 }`}>
                     {
-                      msg.role === 'user' ? 'Written user Prompt' : 
+                      msg.role === 'user' ? '⌨ User Prompt' : 
                       msg.role === 'user_speech' ? "Spoken user prompt" : 
                       msg.role === 'bot' ? "Written AI response" : 
                       msg.role === 'ai_response' ? "Spoken AI Response" : "Error"
                     }
-
+                    
                     {
-                      msg.emotion && (
+                      msg != 'neutral' || msg.emotion && (
                           `${msg.emotion}`
                         )
                     } - {msg.timestamp}
-
+                    <br/>
                     {
                       msg.role === 'user' ? (
                         <>
@@ -421,22 +416,6 @@ const Chatbot = () => {
                         )
                       )
                     }
-
-                    {/* // (
-                    // <>
-                        
-
-                    //     {
-                    //     }
-                    // </>
-                    // ) : (
-                    // <pre className="whitespace-pre-wrap">
-                    //     {
-                    //       typeof msg.content === 'object'
-                    //       ? JSON.stringify(msg.content, null, 2)
-                    //       : <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    //     } 
-                    // </pre> */}
                 <div ref={messageEndRef}/>
               </div>
             </div>
@@ -516,7 +495,7 @@ const Chatbot = () => {
                             </div>
                             <button
                               type="button"
-                              disabled={!inputText}
+                              disabled={inputText}
                               onClick={clearHistory}
                               className="h-fit p-2 my-0 ml-2 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
                               >
@@ -532,14 +511,13 @@ const Chatbot = () => {
                             </button>
                             <button
                               type="button"
-                              disabled={!inputText}
+                              // disabled={!inputText}
                               onClick={startVoiceChat}
                               className="h-fit p-2 my-0 ml-2 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
                               >
-                                {inputText ? 'AI speaking' : 'User '}
+                                {inputText ? 'AI speaking' : 'User speak'}
                             </button>
                           </div>
-                          
 
                           <div className='mr-2'>
                             <Checkbox
@@ -571,9 +549,6 @@ const Chatbot = () => {
             </>
           )
         }
-
-
-        
       </div>
     </div>
   );

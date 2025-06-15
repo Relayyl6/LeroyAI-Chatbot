@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = process.env.REACT_APP_API_BASE || 'https://localhost:5001/api';
+const API_BASE = 'https://localhost:5001/api';
 
 // new instance of axios with a custom config
 const apiClient = axios.create({

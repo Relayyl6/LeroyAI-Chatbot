@@ -24,6 +24,7 @@ CORS(app) # Enable CORS for local development (React app on different port)
 # Initialize LLM (do this once)
 # Ensure GOOGLE_API_KEY is loaded from environment
 api_key = os.environ.get("GOOGLE_API_KEY")
+genai.configure(api_key=api_key)
 if not api_key:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in .env")
 
@@ -127,7 +128,8 @@ def speak_and_listen_for_response(prompt_text):
 
 def chat_with_gemini(input_text, emotion_context=None):
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        # or genai.GenerativeModel('gemini/gemini-1.5-flash')
         
         # Add emotion context to the prompt if available
         if emotion_context and emotion_context != "neutral":
@@ -185,46 +187,43 @@ def detect_emotion_from_frame():
 def continuous_emotion_detection():
     global chatbot_state # accessing the glovbal chatbot_state variable
 
-    lock = threading.Lock()
-    with lock:
-        if chatbot_state.camera_active:
-            try:
-                cap = cv2.VideoCapture(0)
-                ret, frame = cap.read()
-
-                if ret:
-                    analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
-                    if isinstance(analysis, list):
-                        chatbot_state.current_emotion = analysis[0]['dominant_emotion']
-                    else:
-                        chatbot_state.current_emotion = analysis['dominant_emotion']
-                cap.release()
-                time.sleep(2)
-            except Exception as e:
-                print(f"Emotion detection error: {e}")
-                time.sleep(5)
-            finally:
-                cap.release()
+    while chatbot_state.camera_active:
+        try:
+            cap = cv2.VideoCapture(0)
+            ret, frame = cap.read()
+            if ret:
+                analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False) # consider adding more than just emotion, let the AI take face_data and craft response base on that
+                if isinstance(analysis, list):
+                    chatbot_state.current_emotion = analysis[0]['dominant_emotion']
+                else:
+                    chatbot_state.current_emotion = analysis['dominant_emotion']
+            cap.release()
+            time.sleep(2)
+        except Exception as e:
+            print(f"Emotion detection error: {e}")
+            time.sleep(5)
+        finally:
+            cap.release()
 
 
 # API routes
 
 @app.route('/api/generate', methods=['POST'])
 def generate_response():
+
+    start_time = time.time()
+    print(f"=== REQUEST STARTED at {start_time} ===")
     try:
+        print(f"Step 1: Getting JSON data - {time.time() - start_time:.2f}s")
         data = request.get_json()
-        if not data or 'goal' not in data or 'description' not in data or 'message' not in data:
+        if not data or 'message' not in data:
             return jsonify({
                 "error": "Missing 'goal' or 'description' or 'message' in request"
             }), 400
-
-        user_goal = data['goal']
-        user_description = data['description']
-
+        
+        print(f"Step 1: Getting JSON data - {time.time() - start_time:.2f}s")
         user_input = ""
-        if 'goal' in data and 'description' in data:
-            user_input = f"Goal: {user_goal} \n Description: {user_description}"
-        elif 'message' in data:
+        if 'message' in data:
             user_input = data['message']
         elif 'text' in data:
             user_input = data['text']
@@ -232,17 +231,22 @@ def generate_response():
             jsonify({
                 "error" : "missing required input field"
             }), 400
-
+        print(f"User input: {user_input}")
+        
 
         emotion_context = chatbot_state.current_emotion
+        print(f"Emotion: emotion_context")
 
+        print(f"Step 3: Calling Gemini API - {time.time() - start_time:.2f}s")
         ai_result = chat_with_gemini(user_input, emotion_context)
+        print(f"Step 4: Gemini API completed - {time.time() - start_time:.2f}s")
 
         if not ai_result["success"]:
             return jsonify({
                 "error" : ai_result["error"]
             }), 500
 
+        print(f"Step 4: Gemini API completed - {time.time() - start_time:.2f}s")
         response_text = ai_result["response"]
 
         chatbot_state.conversation_history.extend([
@@ -259,45 +263,24 @@ def generate_response():
             }
         ])
 
-        auto_speak = data.get("auto_speak", False)
-        if auto_speak:
-            speak_text(response_text)
-
-        #crew AI persepctive
-        # Dynamically create agent and task based on input
-        # You might want to make the agent's role more dynamic too, or have a fixed one
-        # custom_agent = Agent(
-        #     role="Creative Content Generator", # Or make this configurable
-        #     goal=user_goal,
-        #     backstory="You are an expert in generating creative content based on user specifications, with a focus on clear and actionable outputs.",
-        #     verbose=True,
-        #     llm=llm
-        # )
-
-        # custom_task = Task(
-        #     description=user_description,
-        #     expected_output="A detailed and creative response fulfilling the user's request.", # Or customize this
-        #     agent=custom_agent
-        # )
-
-        # crew = Crew(agents=[custom_agent], tasks=[custom_task], verbose=True)
-        # result = crew.kickoff()
-        # # print("Raw result from crew.kickoff():", result)
-
-        # result_str = str(result)
-
-        # # print("Response being sent to frontend:", result)
-        # return jsonify({"result": result_str})
-
-        return jsonify({
+        response_data = {
             "result" : response_text,
             "emotion_context" : emotion_context,
             "conversation_ID" : len(chatbot_state.conversation_history),
-            "auto_spoke" : auto_speak
-        })
+            "auto_spoke" : False
+        }
+
+        auto_speak = data.get("auto_speak", False)
+        if auto_speak:
+            def speak_async():
+                speak_text(response_text)
+            threading.Thread(target=speak_async, daemon=True).start()
+            response_data["auto_spoke"] = True
+        print(f"Step 6: Sending response - {time.time() - start_time:.2f}s")
+        return jsonify(response_data)
 
     except Exception as e:
-        app.logger.error(f"Error during crew kickoff: {str(e)}")
+        app.logger.error(f"Error during /api/generate: {str(e)}")
         return jsonify({
             "error": str(e)
         }), 500
@@ -333,30 +316,11 @@ def text_to_speech():
             return jsonify({
                 "error" : "missing text in request"
             }), 400
-        text = data['goal']
-        description = data['description']
+        text = data['message']
 
-        question = speak_and_listen_for_response("Would you like to include the description in your text?")
-        if question is None:
-            return jsonify({
-                "success" : False,
-                "message" :"User response is unclear"
-            }), 400
-
-        if text or 'message' in data or not question:
+        if text or 'message' in data:
             success = speak_text(text)
-        elif text or 'message' in data or question:
-            enhanced_prompt = f"{text} {description}"
-            success = speak_text(enhanced_prompt)
-
         if success is True:
-            chatbot_state.conversation_history.append({
-                "type" : "ai_speech",
-                "content" : text,
-                "description"  : description,
-                "timestamp" : time.time()
-            })
-        elif success is False:
             chatbot_state.conversation_history.append({
                 "type" : "ai_speech",
                 "content" : text,
@@ -435,6 +399,7 @@ def start_emotion_monitoring():
             "message" : "Emotion monitoring started"
         })
     except Exception as e:
+        app.logger.error(f"Error occured in /api/start-emotion-monitoring: {str(e)}")
         return jsonify({
             "success" : False,
             "error" : str(e)
@@ -449,6 +414,7 @@ def stop_emotion_monitoring():
             "message" : "Emotion monitoring stopped"
         })
     except Exception as e:
+        app.logger.error(f"Error occured in /api/start-emotion-monitoring: {str(e)}")
         return jsonify({
             "success" : False,
             "error" : str(e)
@@ -503,6 +469,7 @@ def voice_chat():
             "text_to_speech_success" : text_to_speech_success
         })
     except Exception as e:
+        app.logger.error(f"Error occured in /api/voice-chat: {str(e)}")
         return jsonify({
             "success" : False,
             "error" : str(e)

@@ -1,13 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import apiHandling from './apiHandling';
 import Emoji from './emoji';
 import Checkbox from '@mui/material/Checkbox';
+// import { TypeAnimation } from 'react-type-animation'
 
 const Chatbot = () => {
-  const [goal, setGoal] = useState('');
-  const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [messages, setMessages] = useState([]); // Store chat history
@@ -20,6 +19,7 @@ const Chatbot = () => {
   const [isEmotionMonitoring, setIsEmotionMonitoring] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [checked, setChecked] = useState(true);
+  const [emotionInterval, setEmotionInterval] = useState(null);
 
   // sample calling
   // Using Method 3 (enhanced with custom options)
@@ -37,7 +37,7 @@ const Chatbot = () => {
 
   const handleChange = (event) => {
     setChecked(event.target.checked);
-    setAutoSpeak(true)
+    setAutoSpeak(!autoSpeak)
   };
 
   const messageEndRef = useRef(null);
@@ -52,31 +52,38 @@ const Chatbot = () => {
     scrollToBottom();
   }, [messages])
 
-  useEffect(() => {
-    startEmotionMonitoring();
+  // useEffect(() => {
+  //   startEmotionMonitoring();
 
-    getCurrentEmotion();
+  //   getCurrentEmotion();
 
-    return () => {
-      stopEmotionMonitoring()
-    };
+  //   return () => {
+  //     stopEmotionMonitoring()
+  //   };
 
-  }, [])
+  // }, [])
 
   const startEmotionMonitoring = async () => {
     try {
+
+      if (emotionInterval) {
+        clearInterval(emotionInterval);
+        setEmotionInterval(null)
+      }
+      
       await apiHandling('/start-emotion-monitoring', 'POST');
       setIsEmotionMonitoring(true);
 
       // stack emotion update for every 3 seconds
-      const interval = setInterval(getCurrentEmotion, 3000);
-      return () => clearInterval(interval);
+      const interval = setInterval(getCurrentEmotion, 5000);
+      setEmotionInterval(interval)
     } catch (error) {
       console.error("Error starting Emotion Monitoring", error);
+      setError(`Error: ${error.message}`);
     }
   }
 
-  const getCurrentEmotion = async () => {
+  const getCurrentEmotion = useCallback(async () => {
     try {
       const response = await apiHandling('/get-current-emotion')
       if (response.success) {
@@ -84,17 +91,34 @@ const Chatbot = () => {
       }
     } catch (error) {
       console.error("Error getting emotion", error);
+      setError(`Error: ${error.message}`);
     }
-  }
+  }, []);
 
   const stopEmotionMonitoring = async () => {
     try {
       await apiHandling('/stop-emotion-monitoring', 'POST');
       setIsEmotionMonitoring(false);
+      clearInterval();
+
+      if (emotionInterval) {
+        clearInterval(emotionInterval);
+        setEmotionInterval(null);
+      }
     } catch (error) {
       console.error("Error stopping Emotion Monitoring", error);
+      setError(`Error: ${error.message}`);
     }
   }
+
+  useEffect(() => {
+
+    return () => {
+      if (emotionInterval) {
+        clearInterval(emotionInterval)
+      }
+    };
+  }, [emotionInterval])
 
   // send message to AI
   const sendMessage = async () => {
@@ -118,7 +142,8 @@ const Chatbot = () => {
 
     try {
       const response = await apiHandling('/generate', 'POST', {
-        message : inputText
+        message : inputText,
+        auto_speak : autoSpeak
       });
 
       // const requestReadOtLoud = await apiHandling('/aiReponse', 'POST', {
@@ -147,6 +172,7 @@ const Chatbot = () => {
         timestamp : new Date().toLocaleDateString()
       };
       setMessages(prev => [...prev, errorMessage]);
+      setError(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
       setInputText('')
@@ -185,7 +211,8 @@ const Chatbot = () => {
         content : `Voice chat error ${error.message}`,
         timestamp : new Date().toLocaleDateString()
       }
-      setMessages(prev => [...prev, errorMessage])
+      setMessages(prev => [...prev, errorMessage]);
+      setError(`Error: ${error.message}`);
     } finally {
       setIsListening(false)
     }
@@ -207,6 +234,7 @@ const Chatbot = () => {
       }
     } catch (error) {
       alert(`Error: ${error.message}`)
+      setError(`Error: ${error.message}`);
     } finally {
       setIsListening(false)
     }
@@ -217,6 +245,7 @@ const Chatbot = () => {
       await apiHandling('/text-to-speech', 'POST', {text});
     } catch (error) {
       console.error('TextToSpeech Error:', error);
+      setError(`Error: ${error.message}`);
     }
   }
 
@@ -230,7 +259,8 @@ const Chatbot = () => {
         alert(`Emotion Detection Error: ${response.error}`)
       }
     } catch (error) {
-      alert(`Error: ${error.message}`)
+      alert(`Error: ${error.message}`);
+      setError(`Error: ${error.message}`);
     }
   }
 
@@ -240,6 +270,7 @@ const Chatbot = () => {
       setMessages([]);
     } catch (error) {
       console.error('Error clearing hisotry:', error);
+      setError(`Error: ${error.message}`);
     }
   }
  
@@ -279,8 +310,8 @@ const Chatbot = () => {
     <div className="relative flex w-screen items-center justify-center h-screen bg-gray-100 dark:bg-gray-900 p-4">
       <div className="w-[90%] lg:w-[65%] items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col h-[95vh]">
         {/* Header */}
-        <div className="flex p-4 border-b border-gray-200 dark:border-gray-700 bg-red-300 gap-2">
-          <h1 className="md:text-2xl text-xs font-code font-bold text-gray-800 bg-black dark:text-white">
+        <div className="flex p-4 border-b border-gray-200 dark:border-gray-700 gap-2">
+          <h1 className="md:text-2xl text-xs font-code font-bold text-gray-800 dark:text-white">
             LeroyAI Chatbot
           </h1>
         </div>
@@ -326,7 +357,7 @@ const Chatbot = () => {
                           <strong>Prompt:</strong> {msg.content}
                         </>
                       ) : (
-                      <pre>
+                      <pre className='whitespace-pre-wrap'>
                         {
                           typeof msg.content === 'object'
                           ? JSON.stringify(msg.content, null, 2)
@@ -334,18 +365,16 @@ const Chatbot = () => {
                         }
                     </pre>)
                     }
-
                     {
-                      (msg.role === "bot" || msg.role === "ai_response" &&
+                      msg.role === "bot" || msg.role === "ai_response" ?
                         (
                           <button
-                            onClick={textToSpeech(msg.content)}
+                            onClick={textToSpeech(msg.content[-1])}
                             className='mt-1'
                           >
                             🔊 Speak
                           </button>
-                        )
-                      )
+                      ) : null
                     }
                 <div ref={messageEndRef}/>
               </div>
@@ -357,7 +386,13 @@ const Chatbot = () => {
             </div>
           )}
           {error && (
-            <div className="text-red-500 dark:text-red-400 text-center">{error}</div>
+            <div className="text-red-500 dark:text-red-400 text-center">
+              {
+                (
+                  typeof error === 'string' ? error : error.message || 'An Error Occured'
+                )
+              }
+            </div>
           )}
         </div>
 
@@ -373,14 +408,14 @@ const Chatbot = () => {
           !isCollapsed && (
             <>
               {/* Suggested Prompts */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 dark:bg-gray-300 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
                 <form onSubmit={sendMessage} className="space-y-2">
                   <div className='relative flex flex-col w-full h-[8.5rem] dark:bg-gray-900 bg-gray-600 rounded-md'>
                     <textarea
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         placeholder="Enter prompt (e.g., Render 3D assets into a Lifelike futuristic cityscape)"
-                        className="absolute top-0 left-0 h-full w-full z-1 p-2 rounded-md dark:bg-gray-900 bg-gray-600 text-gray-800 dark:text-white resize-none overflow-y-auto"
+                        className="absolute top-0  h-full w-full z-1 p-2 rounded-md dark:bg-gray-900 bg-gray-600 text-gray-800 dark:text-white resize-none overflow-y-auto"
                         rows={3}
                         disabled={isLoading}
                         onKeyDown={
@@ -398,7 +433,7 @@ const Chatbot = () => {
                         }}
                         required
                       />
-                      <div className='absolute bottom-0 w-full h-fit flex flex-row z-10'>
+                      <div className='absolute bottom-0.5 w-full h-fit flex flex-row z-10'>
                         <div className='mx-2 rounded-md w-full flex items-center justify-between'>
                           <div className='flex gap-2 flex-col md:flex-row '>
                             <div className='bg-black hidden sm:flex flex-row rounded-md'>
@@ -408,8 +443,9 @@ const Chatbot = () => {
                               onClick={isEmotionMonitoring ? stopEmotionMonitoring : startEmotionMonitoring}
                               className="h-fit p-2 my-1 ml-1 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
                               >
-                                {isEmotionMonitoring ? 'Stop Emotion' : 'Detect 😄'} 
+                                {isEmotionMonitoring ? 'Stop Detecting 😄' : 'Detect 😄'} 
                               </button>
+
                               <div 
                                 className='h-fit p-[0.3rem] my-1 mx-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 dark:bg-neutral-900 transition pointer-events-none'
                                 style={{
@@ -424,24 +460,16 @@ const Chatbot = () => {
                                   {currentEmotion}
                                 </span> 
                                 <Emoji/>
-                      
+                                
                               </div>
                           
                               </div>
                                 <div className='bg-white hidden lg:flex flex-row rounded-md'>
                                   <button
-                                  type="button"
-                                  disabled={inputText}
-                                  onClick={clearHistory}
-                                  className="h-fit p-2 my-1 ml-1 mr-0 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
-                                  >
-                                    {inputText ? 'clearing' : 'clear'}
-                                  </button>
-                                  <button
                                     type="button"
                                     disabled={isListening}
                                     onClick={speechToText}
-                                    className={`${isListening ? 'bg-[ff9800]' : 'bg-[ff0000]'} h-fit p-2 my-1 ml-1 mr-0 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition`}
+                                    className={`${isListening ? 'bg-[ff9800] mr-1' : 'bg-[ff0000]'} h-fit p-2 my-1 ml-1 mr-0 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300`}
                                     >
                                       {isListening ? 'Listening 👂' : 'STT 🎤'}
                                   </button>
@@ -449,13 +477,41 @@ const Chatbot = () => {
                                     type="button"
                                     // disabled={!inputText}
                                     onClick={startVoiceChat}
-                                    className="h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
+                                    className={`${isListening ? 'hidden' : 'visible' } h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300`}
                                     >
                                       {inputText ? 'AI speaking' : 'User speak'}
                                   </button>
+                                  <button
+                                    type="button"
+                                    disabled={isLoading}
+                                    onClick={detectEmotionOnce}
+                                    className="h-fit p-2 my-1 ml-0 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
+                                    >
+                                      {/* <TypeAnimation
+                                        sequence={[
+                                          '😤', 2000,
+                                          '😥', 2000,
+                                          '😷', 2000,
+                                          ]}
+                                        wrapper='span'
+                                        speed={30}
+                                        repeat={Infinity}
+                                      /> */} 😴
+                                </button>
                                 </div>
+
+                                <div className='bg-black hidden lg:flex flex-row rounded-md'>
+                                <button
+                                  type="button"
+                                  disabled={inputText}
+                                  onClick={clearHistory}
+                                  className="h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300"
+                                  >
+                                    clear
+                                </button>
+                              </div>
                             </div>
-                            
+
 
                           <div className='mr-2'>
                             <Checkbox

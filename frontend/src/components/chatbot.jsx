@@ -74,7 +74,7 @@ const Chatbot = () => {
       await apiHandling('/start-emotion-monitoring', 'POST');
       setIsEmotionMonitoring(true);
 
-      // stack emotion update for every 3 seconds
+      // stack emotion update for every 5 seconds
       const interval = setInterval(getCurrentEmotion, 5000);
       setEmotionInterval(interval)
     } catch (error) {
@@ -99,7 +99,6 @@ const Chatbot = () => {
     try {
       await apiHandling('/stop-emotion-monitoring', 'POST');
       setIsEmotionMonitoring(false);
-      clearInterval();
 
       if (emotionInterval) {
         clearInterval(emotionInterval);
@@ -331,7 +330,7 @@ const Chatbot = () => {
             messages?.map((msg, index) => (
             <div
               key={index}
-              className={`flex ${msg.role === 'user' || msg.role === 'user_speech' ? 'justify-end' : msg.role === 'Error' ? 'items-center justify-center' : 'justify-start'}`}
+              className={`flex ${msg.role === 'user' || msg.role === 'user_speech' ? 'justify-end' : 'justify-start'}`}
             >
               <div
                 className={`max-w-[70%] p-3 rounded-lg
@@ -339,14 +338,14 @@ const Chatbot = () => {
                     ? 'bg-neutral-900 text-white' : msg.role === 'error' ? 'bg-red-700' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white'
                 }`}>
                     {
-                      msg.role === 'user' ? '⌨ User Prompt' : 
-                      msg.role === 'user_speech' ? "Spoken user prompt" : 
-                      msg.role === 'bot' ? "Written AI response" : 
-                      msg.role === 'ai_response' ? "Spoken AI Response" : "Error"
+                      msg.role === 'user' ? '✍ User Prompt' :
+                      msg.role === 'user_speech' ? "🗣 user prompt" :
+                      msg.role === 'bot' ? "✍ AI response" :
+                      msg.role === 'ai_response' ? "🔊 AI Response" : "Error"
                     }
                     
                     {
-                      msg != 'neutral' || msg.emotion && (
+                      msg.emotion || msg.emotion != 'neutral' && (
                           `${msg.emotion}`
                         )
                     } - {msg.timestamp}
@@ -357,11 +356,11 @@ const Chatbot = () => {
                           <strong>Prompt:</strong> {msg.content}
                         </>
                       ) : (
-                      <pre className='whitespace-pre-wrap'>
+                      <pre className='whitespace-pre-wrap font-code'>
                         {
                           typeof msg.content === 'object'
-                          ? JSON.stringify(msg.content, null, 2)
-                          : <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          ? JSON.stringify(msg.content, null, 2) // if its an object
+                          : <ReactMarkdown>{msg.content}</ReactMarkdown> // if its a string
                         }
                     </pre>)
                     }
@@ -408,7 +407,7 @@ const Chatbot = () => {
           !isCollapsed && (
             <>
               {/* Suggested Prompts */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-800 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
+              <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-800 shadow-xl rounded-xl mb-3 w-full max-w-[43rem]">
                 <form onSubmit={sendMessage} className="space-y-2">
                   <div className='relative flex flex-col w-full h-[8.5rem] dark:bg-gray-900 bg-gray-600 rounded-md'>
                     <textarea
@@ -460,10 +459,8 @@ const Chatbot = () => {
                                   {currentEmotion}
                                 </span> 
                                 <Emoji/>
-                                
                               </div>
-                          
-                              </div>
+                            </div>
                                 <div className='bg-white hidden lg:flex flex-row rounded-md'>
                                   <button
                                     type="button"
@@ -471,7 +468,7 @@ const Chatbot = () => {
                                     onClick={speechToText}
                                     className={`${isListening ? 'bg-[ff9800] mr-1' : 'bg-[ff0000]'} h-fit p-2 my-1 ml-1 mr-0 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300`}
                                     >
-                                      {isListening ? 'Listening 👂' : 'STT 🎤'}
+                                      {isListening ? 'Listening 👂' : 'Speak🎤'}
                                   </button>
                                   <button
                                     type="button"
@@ -487,7 +484,7 @@ const Chatbot = () => {
                                     onClick={detectEmotionOnce}
                                     className="h-fit p-2 my-1 ml-0 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition"
                                     >
-                                      {/* <TypeAnimation
+                                      {/* <TypeAnimation // import from react animation
                                         sequence={[
                                           '😤', 2000,
                                           '😥', 2000,
@@ -497,19 +494,19 @@ const Chatbot = () => {
                                         speed={30}
                                         repeat={Infinity}
                                       /> */} 😴
-                                </button>
+                                  </button>
                                 </div>
 
                                 <div className='bg-black hidden lg:flex flex-row rounded-md'>
-                                <button
-                                  type="button"
-                                  disabled={inputText}
-                                  onClick={clearHistory}
-                                  className="h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300"
-                                  >
+                                  <button
+                                    type="button"
+                                    disabled={inputText}
+                                    onClick={clearHistory}
+                                    className="h-fit p-2 my-1 ml-1 mr-1 bg-neutral-900 text-white rounded-md hover:bg-neutral-900 disabled:bg-blue-300 dark:bg-neutral-900 dark:hover:bg-blue-700 dark:disabled:bg-blue-400 transition duration-300"
+                                    >
                                     clear
-                                </button>
-                              </div>
+                                  </button>
+                                </div>
                             </div>
 
 
@@ -530,9 +527,9 @@ const Chatbot = () => {
                             >
                               {isLoading ?
                                 <div className="flex justify-center">
-                                  <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                  <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                                 </div>
-                               : 'Send'}
+                               : 'Send⏩'}
                             </button>
                           </div>
                         </div>

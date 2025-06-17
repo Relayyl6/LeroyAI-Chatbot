@@ -408,6 +408,11 @@ def start_emotion_monitoring():
 @app.route('/api/stop-emotion-monitoring', methods=['POST'])
 def stop_emotion_monitoring():
     try:
+        if not chatbot_state.camera_active:
+            return jsonify({
+                "success" : False,
+                "message" : "Emotion monitoring inactive"
+            })
         chatbot_state.camera_active = False
         return jsonify({
             "success" : True,

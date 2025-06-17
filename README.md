@@ -93,8 +93,7 @@ The app will be available at `http://localhost:3000`.
 - Accepts JSON payload:
   ```json
   {
-    "goal": "Your goal",
-    "description": "Your description"
+    "message": "Your input from the front end",
   }
   ```
 - Returns JSON response with the processed result

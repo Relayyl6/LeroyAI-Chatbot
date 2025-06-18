@@ -142,7 +142,7 @@ const Chatbot = () => {
     try {
       const response = await apiHandling('/generate', 'POST', {
         message : inputText,
-        auto_speak : autoSpeak
+        auto_speak : checked
       });
 
       // const requestReadOtLoud = await apiHandling('/aiReponse', 'POST', {
@@ -241,7 +241,9 @@ const Chatbot = () => {
   // text to speech
   const textToSpeech = async (text) => {
     try {
-      await apiHandling('/text-to-speech', 'POST', {text});
+      await apiHandling('/text-to-speech', 'POST', {
+        message : text
+      });
     } catch (error) {
       console.error('TextToSpeech Error:', error);
       setError(`Error: ${error.message}`);
@@ -343,10 +345,10 @@ const Chatbot = () => {
                       msg.role === 'bot' ? "✍ AI response" :
                       msg.role === 'ai_response' ? "🔊 AI Response" : "Error"
                     }
-                    
+                    &nbsp;
                     {
-                      msg.emotion || msg.emotion != 'neutral' && (
-                          `${msg.emotion}`
+                      msg.emotion && msg.emotion !== 'neutral' && (
+                          msg.role !== 'bot' && msg.role !== 'ai_response' ? `(${msg.emotion})` : null
                         )
                     } - {msg.timestamp}
                     <br/>
@@ -368,7 +370,13 @@ const Chatbot = () => {
                       msg.role === "bot" || msg.role === "ai_response" ?
                         (
                           <button
-                            onClick={textToSpeech(msg.content[-1])}
+                            onClick={() => {
+                                if (index === messages.length -1) {
+                                  textToSpeech(msg.content)
+                                } else {
+                                  console.log("Nothing to see here");
+                                }}
+                              }
                             className='mt-1'
                           >
                             🔊 Speak
